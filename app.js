@@ -1,11 +1,18 @@
+/*
+
+  @ Dexcom Developer documentation
+  https://developer.dexcom.com/overview
+
+*/
+
 require('dotenv').config();
 const PORT = process.env.PORT || 5000;
 const express = require('express');
 const app = express();
 const qs = require("querystring");
 const http = require("https");
-
-
+let startDate = ''
+let nowDate = ''
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -60,26 +67,22 @@ app.get('/get-auth', (req, res, err) => {
 
 
 app.get('/get-data', (req, res, err) => {
-  console.log(req.query)
-  const access_token = req.query.access_token ,
-        refresh_token = req.query.refresh_token
-        dateFrom = req.query.dateFrom,
-        dateNow = req.query.dateNow,
-        auth = `Bearer ${access_token}`
+  const access_token = req.query.access_token 
+  const refresh_token = req.query.refresh_token
+  startDate = req.query.dateFrom
+  nowDate = req.query.dateNow
+  
+  let setting = {
+    access_token : req.query.access_token ,
+    refresh_token : req.query.refresh_token
+  }
 
-        let sendBack = {
-          accessToken: access_token,
-          refreshtoken: refresh_token
-        }
-        if(!dateFrom) {
-          res.json(sendBack)
-        }
 
   let options = {
     "method": "GET",
     "hostname": "api.dexcom.com",
     "port": null,
-    "path": `/v2/users/self/egvs?startDate=${dateFrom}&endDate=${dateNow}`,
+    "path": `/v2/users/self/egvs?startDate=${startDate}&endDate=${nowDate}`,
     "headers": {
       "authorization": `Bearer ${access_token}`,
       }
@@ -93,13 +96,18 @@ app.get('/get-data', (req, res, err) => {
     });
 
     request.on("end", function () {
-      console.log(request.statusCode)
+      console.log(request.statusMessage)
       if(request.statusCode === 200) {
         let body = Buffer.concat(chunks);
-        res.json(JSON.parse(body.toString()));
+        const data = {
+          settings: setting ,
+          dexcom : JSON.parse(body.toString())
+        }
+        res.json(data);
       } else {
         console.log('why did this come here?')
-        res.redirect(`/refresh?refresh_token=${refresh_token}`)
+        console.log('hi')
+        res.redirect(`/refresh/?access_token=${access_token}&refresh_token=${refresh_token}&dateFrom=${startDate}&dateNow=${nowDate}`)
       }
     });
   });
@@ -109,8 +117,11 @@ app.get('/get-data', (req, res, err) => {
 
 
 app.get("/refresh", (req, res, next) => {
-  let refreshtoken = req.query.refresh_token;
-  console.log(refreshtoken, 'refresher')
+  access_token = req.query.access_token 
+  refresh_token = req.query.refresh_token
+  startDate = req.query.dateFrom
+  nowDate = req.query.dateNow
+  
   let options = {
     method: "POST",
     hostname: "api.dexcom.com",
@@ -131,12 +142,11 @@ app.get("/refresh", (req, res, next) => {
 
     ress.on("end", () => {
       let body = Buffer.concat(chunks);
-      let access_token = JSON.parse(body.toString()).access_token;
-      let refresh_token = JSON.parse(body.toString()).refresh_token;
-      res.json(JSON.parse(body));
-      // res.redirect(
-      //   `/get-data/?access_token=${access_token}&refresh_token=${refresh_token}`
-      // );
+      access_token = JSON.parse(body.toString()).access_token;
+      refresh_token = JSON.parse(body.toString()).refresh_token;
+      console.log(refresh_token, 'here')
+      console.log('hi')
+      res.redirect(`/get-data/?access_token=${access_token}&refresh_token=${refresh_token}&dateFrom=${startDate}&dateNow=${nowDate}`);
     });
   });
 
@@ -144,7 +154,7 @@ app.get("/refresh", (req, res, next) => {
     qs.stringify({
       client_secret: process.env.CLIENT_SECRET,
       client_id: "Gm704rNUXZdRLy2SkbMvSA6ansXnIk1H",
-      refresh_token: refreshtoken,
+      refresh_token: refresh_token,
       grant_type: "refresh_token",
       redirect_uri: "http://localhost:3000/"
     })
